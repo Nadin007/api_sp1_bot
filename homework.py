@@ -22,27 +22,68 @@ PRAKTIKUM_TOKEN = os.getenv('PRAKTIKUM_TOKEN')
 TELEGRAM_TOKEN = os.getenv('TELEGRAM_TOKEN')
 CHAT_ID = os.getenv('TELEGRAM_CHAT_ID')
 
-# проинициализируйте бота здесь,
-# чтобы он был доступен в каждом нижеобъявленном методе,
-# и не нужно было прокидывать его в каждый вызов
+HEADERS = {'Authorization': 'OAuth ' + PRAKTIKUM_TOKEN}
+URL = 'https://praktikum.yandex.ru/api/user_api/homework_statuses/'
+STATUSES = {
+    'rejected': 'У вас проверили работу "{0}"!\n\n'
+                'К сожалению, в работе нашлись ошибки.',
+    'approved': 'У вас проверили работу "{0}"!\n\n'
+                'Ревьюеру всё понравилось, работа зачтена!',
+    'reviewing': 'Ваша работа "{0}" на стадии проверки ревьювером!'}
+SLEEP_TIME = 300
+
 bot = Bot(token=TELEGRAM_TOKEN)
-headers = {'Authorization': 'OAuth ' + PRAKTIKUM_TOKEN}
-url = 'https://praktikum.yandex.ru/api/user_api/homework_statuses/'
 
 
 def parse_homework_status(homework):
-    homework_name = homework['homework_name']
-    if homework['status'] != 'approved':
-        verdict = 'К сожалению, в работе нашлись ошибки.'
+    if 'homework_name' in homework and 'status' in homework:
+        homework_name = homework['homework_name']
+        status = homework['status']
+        if status in STATUSES:
+            return STATUSES[status].format(homework_name)
+        else:
+            logger.info('New homework status was found.')
+            return f'А это что-то новенькое - {status}!'
     else:
-        verdict = 'Ревьюеру всё понравилось, работа зачтена!'
-    return f'У вас проверили работу "{homework_name}"!\n\n{verdict}'
+        raise Exception(
+            "Response should contain homework_name and status keys")
 
 
 def get_homeworks(current_timestamp):
-    homework_statuses = requests.get(url, headers=headers, params={
-        'from_date': current_timestamp})
-    return homework_statuses.json()
+    try:
+        homework_statuses = requests.get(URL, headers=HEADERS, params={
+            'from_date': current_timestamp})
+    except requests.exceptions.HTTPError as err:
+        raise Exception(
+            "request failed with a HTTPError with current_timestamp = "
+            f"{current_timestamp} URL = {URL}") from err
+    except requests.exceptions.ConnectionError as err:
+        raise Exception(
+            "request failed with a ConnectionError with current_timestamp = "
+            f"{current_timestamp} URL = {URL}"
+        ) from err
+    except requests.exceptions.ConnectTimeout as err:
+        raise Exception(
+            "request failed with a ConnectTimeout with current_timestamp = "
+            f"{current_timestamp} URL = {URL}"
+        ) from err
+    except requests.exceptions.RequestException as err:
+        raise Exception(
+            "request failed with a RequestException with current_timestamp = "
+            f"{current_timestamp} URL = {URL}"
+        ) from err
+    except requests.exceptions.TooManyRedirects as err:
+        raise Exception(
+            "request failed with a TooManyRedirects with current_timestamp = "
+            f"{current_timestamp} URL = {URL}"
+        ) from err
+    try:
+        return homework_statuses.json()
+    except ValueError as err:
+        raise Exception(
+            "Server sent invalid json current_timestamp = "
+            f"{current_timestamp} URL = {URL}"
+        ) from err
 
 
 def send_message(message):
@@ -51,7 +92,7 @@ def send_message(message):
 
 def main():
     logger.debug('Bot started.')
-    current_timestamp = int(time.time())  # Начальное значение timestamp
+    current_timestamp = int(time.time())
     while True:
         try:
             homework = get_homeworks(current_timestamp)['homeworks']
@@ -60,13 +101,13 @@ def main():
                 send_message(message)
                 logger.info('Messege was sent.')
                 current_timestamp = int(time.time())
-            time.sleep(5 * 60)  # Опрашивать раз в пять минут
+            time.sleep(SLEEP_TIME)
 
         except Exception as e:
-            message = f'Бот упал с ошибкой: {e}'
+            message = f'Бот упал с ошибкой: {e}, {e.__cause__}'
             logger.error(message)
             send_message(message)
-            time.sleep(5)
+            time.sleep(SLEEP_TIME)
 
 
 if __name__ == '__main__':
