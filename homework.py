@@ -30,7 +30,7 @@ STATUSES = {
     'approved': 'У вас проверили работу "{0}"!\n\n'
                 'Ревьюеру всё понравилось, работа зачтена!',
     'reviewing': 'Ваша работа "{0}" на стадии проверки ревьювером!'}
-SLEEP_TIME = 300
+SLEEP_TIME = 900
 
 bot = Bot(token=TELEGRAM_TOKEN)
 
