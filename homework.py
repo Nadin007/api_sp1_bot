@@ -1,12 +1,13 @@
 import logging
 import os
 import time
+from json.decoder import JSONDecodeError
 
 import requests
 from dotenv import load_dotenv
 from telegram import Bot
 
-logger = logging.getLogger('My_logger')
+logger = logging.getLogger(__name__)
 logger.setLevel(logging.DEBUG)
 
 formatter = logging.Formatter(
@@ -35,51 +36,36 @@ SLEEP_TIME = 900
 bot = Bot(token=TELEGRAM_TOKEN)
 
 
+class InvalidHWServerResponse(ValueError):
+    pass
+
+
 def parse_homework_status(homework):
-    if 'homework_name' in homework and 'status' in homework:
-        homework_name = homework['homework_name']
-        status = homework['status']
-        if status in STATUSES:
-            return STATUSES[status].format(homework_name)
-        else:
-            logger.info('New homework status was found.')
-            return f'А это что-то новенькое - {status}!'
-    else:
-        raise Exception(
+    if 'homework_name' not in homework or 'status' not in homework:
+        raise InvalidHWServerResponse(
             "Response should contain homework_name and status keys")
+
+    homework_name = homework['homework_name']
+    status = homework['status']
+    if status in STATUSES:
+        return STATUSES[status].format(homework_name)
+    else:
+        logger.warn('New homework status was found.')
+        return f'А это что-то новенькое - {status}!'
 
 
 def get_homeworks(current_timestamp):
     try:
         homework_statuses = requests.get(URL, headers=HEADERS, params={
             'from_date': current_timestamp})
-    except requests.exceptions.HTTPError as err:
-        raise Exception(
-            "request failed with a HTTPError with current_timestamp = "
-            f"{current_timestamp} URL = {URL}") from err
-    except requests.exceptions.ConnectionError as err:
-        raise Exception(
-            "request failed with a ConnectionError with current_timestamp = "
-            f"{current_timestamp} URL = {URL}"
-        ) from err
-    except requests.exceptions.ConnectTimeout as err:
-        raise Exception(
-            "request failed with a ConnectTimeout with current_timestamp = "
-            f"{current_timestamp} URL = {URL}"
-        ) from err
     except requests.exceptions.RequestException as err:
-        raise Exception(
-            "request failed with a RequestException with current_timestamp = "
-            f"{current_timestamp} URL = {URL}"
-        ) from err
-    except requests.exceptions.TooManyRedirects as err:
-        raise Exception(
-            "request failed with a TooManyRedirects with current_timestamp = "
-            f"{current_timestamp} URL = {URL}"
-        ) from err
+        logger.error(f"Request failed with a {err} and params: "
+                     f"current_timestamp = {current_timestamp} URL = {URL}")
+        return {}
+
     try:
         return homework_statuses.json()
-    except ValueError as err:
+    except JSONDecodeError as err:
         raise Exception(
             "Server sent invalid json current_timestamp = "
             f"{current_timestamp} URL = {URL}"
@@ -95,9 +81,13 @@ def main():
     current_timestamp = int(time.time())
     while True:
         try:
-            homework = get_homeworks(current_timestamp)['homeworks']
-            if len(homework) > 0:
-                message = parse_homework_status(homework[0])
+            if 'homeworks' not in get_homeworks(current_timestamp):
+                raise InvalidHWServerResponse(
+                    "Response should contain 'homeworks' as a key")
+
+            homeworks = get_homeworks(current_timestamp)['homeworks']
+            if homeworks > 0:
+                message = parse_homework_status(homeworks[0])
                 send_message(message)
                 logger.info('Messege was sent.')
                 current_timestamp = int(time.time())
