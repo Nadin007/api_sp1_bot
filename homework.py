@@ -36,10 +36,31 @@ SLEEP_TIME = 900
 bot = Bot(token=TELEGRAM_TOKEN)
 
 
+def send_message(message):
+    return bot.send_message(chat_id=CHAT_ID, text=message)
+
+
+def log_error(e):
+    message = f'Бот упал с ошибкой: {e}, {e.__cause__}'
+    logger.error(message)
+    send_message(message)
+
+
+def log_func_error(func):
+    def wrapper(*args, **kwargs):
+        try:
+            return func(*args, **kwargs)
+        except Exception as e:
+            log_error(e)
+            raise e
+    return wrapper
+
+
 class InvalidHWServerResponse(ValueError):
     pass
 
 
+@log_func_error
 def parse_homework_status(homework):
     if 'homework_name' not in homework or 'status' not in homework:
         raise InvalidHWServerResponse(
@@ -54,14 +75,15 @@ def parse_homework_status(homework):
         return f'А это что-то новенькое - {status}!'
 
 
+@log_func_error
 def get_homeworks(current_timestamp):
     try:
         homework_statuses = requests.get(URL, headers=HEADERS, params={
             'from_date': current_timestamp})
     except requests.exceptions.RequestException as err:
-        logger.error(f"Request failed with a {err} and params: "
-                     f"current_timestamp = {current_timestamp} URL = {URL}")
-        return {}
+        raise Exception(f"Request failed with a {err} and params: "
+                        f"current_timestamp = {current_timestamp} URL = {URL}"
+                        ) from err
 
     try:
         return homework_statuses.json()
@@ -72,8 +94,13 @@ def get_homeworks(current_timestamp):
         ) from err
 
 
-def send_message(message):
-    return bot.send_message(chat_id=CHAT_ID, text=message)
+@log_func_error
+def parse_homeworks(response):
+    if 'homeworks' not in response:
+        raise InvalidHWServerResponse(
+            "Response should contain 'homeworks' as a key")
+
+    return response['homeworks']
 
 
 def main():
@@ -81,22 +108,16 @@ def main():
     current_timestamp = int(time.time())
     while True:
         try:
-            if 'homeworks' not in get_homeworks(current_timestamp):
-                raise InvalidHWServerResponse(
-                    "Response should contain 'homeworks' as a key")
-
-            homeworks = get_homeworks(current_timestamp)['homeworks']
-            if homeworks > 0:
+            response = get_homeworks(current_timestamp)
+            homeworks = parse_homeworks(response)
+            if len(homeworks) > 0:
                 message = parse_homework_status(homeworks[0])
                 send_message(message)
                 logger.info('Messege was sent.')
                 current_timestamp = int(time.time())
             time.sleep(SLEEP_TIME)
 
-        except Exception as e:
-            message = f'Бот упал с ошибкой: {e}, {e.__cause__}'
-            logger.error(message)
-            send_message(message)
+        except Exception:
             time.sleep(SLEEP_TIME)
 
 
