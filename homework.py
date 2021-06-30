@@ -47,9 +47,9 @@ def log_error(e):
 
 
 def log_func_error(func):
-    def wrapper(*args, **kwargs):
+    def wrapper(*args):
         try:
-            return func(*args, **kwargs)
+            return func(*args)
         except Exception as e:
             log_error(e)
             raise e
