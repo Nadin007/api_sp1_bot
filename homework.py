@@ -24,7 +24,7 @@ TELEGRAM_TOKEN = os.getenv('TELEGRAM_TOKEN')
 CHAT_ID = os.getenv('TELEGRAM_CHAT_ID')
 
 HEADERS = {'Authorization': 'OAuth ' + PRAKTIKUM_TOKEN}
-URL = 'https://praktikum.yandex.ru/api/user_api/homework_statuses/'
+URL = 'https://practicum.yandex.ru/api/user_api/homework_statuses/'
 STATUSES = {
     'rejected': 'У вас проверили работу "{0}"!\n\n'
                 'К сожалению, в работе нашлись ошибки.',
@@ -96,7 +96,7 @@ def get_homeworks(current_timestamp):
 
 @log_func_error
 def parse_homeworks(response):
-    if 'homeworks' not in response:
+    if response is None or 'homeworks' not in response:
         raise InvalidHWServerResponse(
             "Response should contain 'homeworks' as a key")
 
