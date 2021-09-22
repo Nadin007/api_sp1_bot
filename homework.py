@@ -76,13 +76,13 @@ def parse_homework_status(homework):
 
 
 @log_func_error
-def get_homeworks(current_timestamp):
+def get_homeworks(current_date):
     try:
         homework_statuses = requests.get(URL, headers=HEADERS, params={
-            'from_date': current_timestamp})
+            'from_date': current_date})
     except requests.exceptions.RequestException as err:
         raise Exception(f"Request failed with a {err} and params: "
-                        f"current_timestamp = {current_timestamp} URL = {URL}"
+                        f"current_timestamp = {current_date} URL = {URL}"
                         ) from err
 
     try:
@@ -90,7 +90,7 @@ def get_homeworks(current_timestamp):
     except JSONDecodeError as err:
         raise Exception(
             "Server sent invalid json current_timestamp = "
-            f"{current_timestamp} URL = {URL}"
+            f"{current_date} URL = {URL}"
         ) from err
 
 
